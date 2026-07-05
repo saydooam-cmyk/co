@@ -52,7 +52,7 @@
     top: 50%;
     left: 50%;
     width: 100vmax;
-    height:65vmax;
+    height: 65vmax;
     transform: translate(-50%, -50%) rotate(-28deg);
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -147,7 +147,7 @@
     50%      { box-shadow: 0 8px 34px rgba(255, 210, 120, 0.5), inset 0 1px 0 rgba(255,255,255,0.8); }
   }
 
-  /* ---------- Write / save modal ---------- */
+  /* ---------- Write panel ---------- */
   #modalBackdrop {
     position: fixed;
     inset: 0;
@@ -240,38 +240,10 @@
     color: #6b5a2e;
   }
 
-  #saveBtn {
-    background: linear-gradient(135deg, #ffd97a, #a9dcf5);
-    color: #4a3d1d;
-    box-shadow: 0 6px 16px rgba(150, 130, 60, 0.3);
-  }
-
   .modal-actions button:hover {
     transform: translateY(-2px);
   }
 
-  #toast {
-    position: fixed;
-    bottom: 34px;
-    left: 50%;
-    transform: translateX(-50%) translateY(20px);
-    z-index: 30;
-    background: rgba(60, 50, 20, 0.85);
-    color: #fff8e6;
-    font-family: 'Lalezar', system-ui, sans-serif;
-    font-size: 17px;
-    direction: rtl;
-    padding: 12px 24px;
-    border-radius: 999px;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-  }
-
-  #toast.show {
-    opacity: 1;
-    transform: translateX(-50%) translateY(0);
-  }
   #cow.missing {
     display: flex;
     align-items: center;
@@ -302,20 +274,17 @@
   <div id="modalBackdrop">
     <div id="modalCard">
       <h2>وش رايك في اللعبة؟</h2>
-      <textarea id="modalText" placeholder="اكتب رأيك هنا..."></textarea>
+      <textarea id="modalText" placeholder="اكتب رأيك هنا... (يتحفظ تلقائيًا وانت تكتب)"></textarea>
       <div class="modal-actions">
-        <button id="cancelBtn">إلغاء</button>
-        <button id="saveBtn">حفظ</button>
+        <button id="cancelBtn">تم</button>
       </div>
     </div>
   </div>
 
-  <div id="toast">تم الحفظ</div>
-
 <script>
   // ---------- Build the tiled SAKINA background ----------
   const textBg = document.getElementById('textBg');
-  const COPIES = 20; // matches the 5x4 grid above
+  const COPIES = 16; // matches the 4x4 grid above
   const frag = document.createDocumentFragment();
   for (let i = 0; i < COPIES; i++) {
     const span = document.createElement('span');
@@ -371,13 +340,13 @@
   const ESCAPE_DIST   = 200;   // if the mouse gets this close, the cow bolts
   const KEEP_DIST     = 230;   // preferred distance the cow likes to keep while "following"
   const IDLE_MS       = 400;   // no mouse movement for this long -> settle and float in place
-  const FLOAT_AMP     = 10;     // px of idle bobbing
+  const FLOAT_AMP     = 10;    // px of idle bobbing
   const FLOAT_SPEED   = 0.0010;// idle bob speed
 
   // rates expressed as "% closed per second" then converted per-frame using dt,
   // so motion speed no longer depends on the browser's frame rate
-  const CURSOR_RATE = 200;   // cursor catch-up rate
-  const FOLLOW_RATE = 10;  // cow catch-up rate while following
+  const CURSOR_RATE = 200;  // cursor catch-up rate
+  const FOLLOW_RATE = 10;   // cow catch-up rate while following
   const ESCAPE_RATE = 9;    // cow catch-up rate while escaping (faster = more panicked)
 
   function smoothing(rate, dt) {
@@ -475,27 +444,27 @@
     cowY = Math.min(cowY, window.innerHeight - cowH);
   });
 
-  // ---------- Write / save button ----------
+  // ---------- Write panel + auto-save while typing ----------
   const openBtn = document.getElementById('openBtn');
   const backdrop = document.getElementById('modalBackdrop');
   const modalText = document.getElementById('modalText');
   const cancelBtn = document.getElementById('cancelBtn');
-  const saveBtn = document.getElementById('saveBtn');
-  let toastTimer = null;
 
   function openModal() {
+    modalText.value = '';
+    lastSavedValue = '';
     backdrop.classList.add('open');
     setTimeout(() => modalText.focus(), 200);
   }
 
   function closeModal() {
+    flushSave();          // make sure the very last keystrokes are captured
     backdrop.classList.remove('open');
   }
 
   openBtn.addEventListener('click', openModal);
   cancelBtn.addEventListener('click', closeModal);
 
-  // click on the dimmed backdrop (but not the card itself) also closes it
   backdrop.addEventListener('click', (e) => {
     if (e.target === backdrop) closeModal();
   });
@@ -504,9 +473,8 @@
     if (e.key === 'Escape' && backdrop.classList.contains('open')) closeModal();
   });
 
-
-  // Keep every response locally in the browser as a backup, regardless of
-  // whether real file writing is available (never triggers a download).
+  // Local backup: every saved line also goes into localStorage, so nothing
+  // is lost even if the person never grants file-write permission.
   function backupLocally(entry) {
     const key = 'sakinaFeedback';
     const list = JSON.parse(localStorage.getItem(key) || '[]');
@@ -514,9 +482,9 @@
     localStorage.setItem(key, JSON.stringify(list));
   }
 
-  // Reused across saves so the user only picks the file location once per
-  // visit, then every future save writes straight into that same save.txt
-  // with no download prompt at all.
+  // The file handle is requested once per visit (native "choose a file"
+  // dialog, not a download), then reused silently for every later write.
+  // Point it at save.txt inside your project folder when the dialog opens.
   let fileHandle = null;
   const supportsFS = 'showSaveFilePicker' in window;
 
@@ -540,34 +508,41 @@
     await writable.close();
   }
 
-  saveBtn.addEventListener('click', async () => {
-    const content = modalText.value.trim();
-    if (!content) {
-      // showToast('اكتب شيء قبل الحفظ');
-      return;
-    }
-
+  function writeEntry(text) {
     const stamp = new Date().toLocaleString('ar-SA');
-    const entry = `[${stamp}] ${content}`;
-
+    const entry = `[${stamp}] ${text}`;
     backupLocally(entry);
-
     if (supportsFS) {
-      try {
-        const handle = await ensureFileHandle();
-        await appendToFile(handle, entry);
-        // showToast('تم الحفظ في save.txt');
-      } catch (err) {
-        // user closed the file picker or denied permission
-        // showToast('تم الحفظ محليًا في المتصفح');
-      }
-    } else {
-      // Firefox/Safari don't support direct file writing yet
-      // showToast('تم الحفظ محليًا في المتصفح');
+      ensureFileHandle()
+        .then((handle) => appendToFile(handle, entry))
+        .catch(() => { /* picker closed / permission denied: local backup already has it */ });
     }
+  }
 
-    modalText.value = '';
-    closeModal();
+  // ---- typing tracker: saves 300ms after the person stops typing ----
+  // if they keep typing afterwards, only the newly added text is saved
+  // as its own line, instead of re-saving everything from the start.
+  let lastSavedValue = '';
+  let debounceTimer = null;
+
+  function diffNewPart(current, previous) {
+    if (current === previous) return '';
+    if (current.startsWith(previous)) return current.slice(previous.length);
+    // text was edited/deleted rather than simply extended: save it as a fresh line
+    return current;
+  }
+
+  function flushSave() {
+    clearTimeout(debounceTimer);
+    const current = modalText.value;
+    const newPart = diffNewPart(current, lastSavedValue).trim();
+    if (newPart) writeEntry(newPart);
+    lastSavedValue = current;
+  }
+
+  modalText.addEventListener('input', () => {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(flushSave, 300);
   });
 </script>
 
