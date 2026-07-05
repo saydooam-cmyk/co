@@ -24,7 +24,10 @@ concurrency:
 jobs:
   # Single deploy job since we're just deploying
   deploy:
+   env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     environment:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
