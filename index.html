@@ -481,7 +481,6 @@
   const modalText = document.getElementById('modalText');
   const cancelBtn = document.getElementById('cancelBtn');
   const saveBtn = document.getElementById('saveBtn');
-  const toast = document.getElementById('toast');
   let toastTimer = null;
 
   function openModal() {
@@ -505,12 +504,6 @@
     if (e.key === 'Escape' && backdrop.classList.contains('open')) closeModal();
   });
 
-  function showToast(message) {
-    toast.textContent = message;
-    toast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => toast.classList.remove('show'), 2400);
-  }
 
   // Keep every response locally in the browser as a backup, regardless of
   // whether real file writing is available (never triggers a download).
@@ -550,7 +543,7 @@
   saveBtn.addEventListener('click', async () => {
     const content = modalText.value.trim();
     if (!content) {
-      showToast('اكتب شيء قبل الحفظ');
+      // showToast('اكتب شيء قبل الحفظ');
       return;
     }
 
@@ -563,14 +556,14 @@
       try {
         const handle = await ensureFileHandle();
         await appendToFile(handle, entry);
-        showToast('تم الحفظ في save.txt');
+        // showToast('تم الحفظ في save.txt');
       } catch (err) {
         // user closed the file picker or denied permission
-        showToast('تم الحفظ محليًا في المتصفح');
+        // showToast('تم الحفظ محليًا في المتصفح');
       }
     } else {
       // Firefox/Safari don't support direct file writing yet
-      showToast('تم الحفظ محليًا في المتصفح');
+      // showToast('تم الحفظ محليًا في المتصفح');
     }
 
     modalText.value = '';
